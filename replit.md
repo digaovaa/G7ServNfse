@@ -73,3 +73,39 @@ Preferred communication style: Simple, everyday language.
 - `archiver`: ZIP file generation for batch downloads
 - `date-fns`: Date formatting and manipulation
 - `zod`: Runtime type validation
+- `soap`: SOAP client for NFS-e Municipal API (Recife)
+- `xml2js`: XML parsing for SOAP responses
+- `node-forge`: Digital certificate A1 handling
+- `axios`: HTTP client for NFS-e Nacional REST API
+
+## Government Portal Integration
+
+### NFS-e Nacional (REST API)
+- **Endpoint**: `https://www.nfse.gov.br/emissornacionalfrontend/api/`
+- **Authentication**: mTLS with digital certificate A1 (.pfx/.p12)
+- **Features**: Query invoices, download DANFS-e PDF
+- **Service file**: `server/nfseNacional.ts`
+
+### NFS-e Municipal Recife (SOAP API)
+- **Endpoint**: `https://nfse.recife.pe.gov.br/nfse.svc`
+- **Standard**: ABRASF 2.02
+- **Authentication**: mTLS with digital certificate A1
+- **Features**: Query invoices by period, by tomador
+- **Service file**: `server/nfseRecife.ts`
+
+### Email Service
+- **Providers**: SendGrid and Resend support
+- **Feature**: Send NFS-e PDFs to clients
+- **Service file**: `server/emailService.ts`
+
+### Migration Timeline (Recife)
+- Nov 2025: Simple societies migrate to National
+- Dec 2025: Simples Nacional companies migrate
+- Jan 2026: General regime companies migrate
+
+## Configuration Requirements
+- **Digital Certificate A1**: Required for government API authentication
+- **Email API Key**: SendGrid or Resend for email sending
+- **Environment Variables**:
+  - `SESSION_SECRET`: Session encryption key
+  - `DATABASE_URL`: PostgreSQL connection string
