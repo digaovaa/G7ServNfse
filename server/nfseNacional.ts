@@ -72,8 +72,8 @@ export class NfseNacionalService {
       this.keyPem = forge.pki.privateKeyToPem(key);
 
       this.httpsAgent = new https.Agent({
-        cert: this.certPem,
-        key: this.keyPem,
+        cert: this.certPem!,
+        key: this.keyPem!,
         rejectUnauthorized: true,
       });
 
