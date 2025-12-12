@@ -33,11 +33,6 @@ export function CNPJSearchForm({ onSearch, isLoading }: CNPJSearchFormProps) {
       return;
     }
     
-    if (!validateCNPJ(cleanCnpj)) {
-      setError("CNPJ inválido");
-      return;
-    }
-    
     setError("");
     onSearch(cleanCnpj, dataInicio || undefined, dataFim || undefined);
   };
