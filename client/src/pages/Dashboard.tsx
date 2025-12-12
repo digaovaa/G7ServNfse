@@ -64,9 +64,9 @@ export default function Dashboard() {
       if (!cnpj) throw new Error("CNPJ nao informado");
       
       const params = new URLSearchParams();
-      params.set("cnpj", cnpj);
-      if (dataInicio) params.set("dataInicio", dataInicio);
-      if (dataFim) params.set("dataFim", dataFim);
+      params.set("cnpj", cnpj as string);
+      if (dataInicio) params.set("dataInicio", dataInicio as string);
+      if (dataFim) params.set("dataFim", dataFim as string);
       
       const res = await fetch(`/api/nfse?${params.toString()}`, { credentials: "include" });
       if (!res.ok) {
