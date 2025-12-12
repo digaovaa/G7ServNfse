@@ -5,8 +5,8 @@ const require = createRequire(import.meta.url);
 const forge = require("node-forge");
 import { gunzipSync } from "zlib";
 
-const BASE_URL_PROD = "https://www.nfse.gov.br/api";
-const BASE_URL_HOMOLOG = "https://www.producaorestrita.nfse.gov.br/api";
+const BASE_URL_PROD = "https://adn.nfse.gov.br";
+const BASE_URL_HOMOLOG = "https://adn.producaorestrita.nfse.gov.br";
 
 export interface CertificadoConfig {
   pfxBuffer: Buffer;
@@ -99,8 +99,8 @@ export class NfseNacionalService {
     }
 
     const endpoint = params.nsu
-      ? `${this.baseUrl}/DFe/${params.nsu}`
-      : `${this.baseUrl}/DFe?ultNSU=${params.ultNsu || "0"}`;
+      ? `${this.baseUrl}/contribuintes/dfe/${params.nsu}`
+      : `${this.baseUrl}/contribuintes/dfe?ultNSU=${params.ultNsu || "0"}`;
 
     const response = await this.makeRequest("GET", endpoint);
     return this.parseDistribuicaoResponse(response);
@@ -111,7 +111,7 @@ export class NfseNacionalService {
       throw new Error("Certificado digital nao configurado");
     }
 
-    const endpoint = `${this.baseUrl}/nfse/${chaveAcesso}`;
+    const endpoint = `${this.baseUrl}/contribuintes/nfse/${chaveAcesso}`;
     const response = await this.makeRequest("GET", endpoint);
 
     if (!response || !response.nfseXmlGZipB64) {
@@ -133,7 +133,7 @@ export class NfseNacionalService {
       throw new Error("Certificado digital nao configurado");
     }
 
-    const endpoint = `${this.baseUrl}/danfse/${chaveAcesso}`;
+    const endpoint = `${this.baseUrl}/danfse/nfse/${chaveAcesso}`;
     const response = await this.makeRequest("GET", endpoint, true);
 
     if (response.pdfB64) {
