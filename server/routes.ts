@@ -6,6 +6,9 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { cnpjSearchSchema, batchDownloadSchema } from "@shared/schema";
 import archiver from "archiver";
+import multer from "multer";
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 export async function registerRoutes(
   httpServer: Server,
@@ -237,6 +240,113 @@ export async function registerRoutes(
       return res.sendStatus(500);
     }
   });
+
+  // Admin authorization middleware
+  const isAdmin = async (req: any, res: any, next: any) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "Não autorizado" });
+      }
+      const user = await storage.getUser(userId);
+      if (!user || user.role !== "admin") {
+        return res.status(403).json({ message: "Acesso restrito a administradores" });
+      }
+      next();
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao verificar permissões" });
+    }
+  };
+
+  // Admin endpoints
+  app.get("/api/admin/nfse-recent", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const nfseList = await storage.getRecentNfse(20);
+      res.json(nfseList);
+    } catch (error) {
+      console.error("Error fetching recent NFS-e:", error);
+      res.status(500).json({ message: "Erro ao buscar NFS-e recentes" });
+    }
+  });
+
+  app.post(
+    "/api/admin/nfse",
+    isAuthenticated,
+    isAdmin,
+    upload.fields([
+      { name: "pdf", maxCount: 1 },
+      { name: "xml", maxCount: 1 },
+    ]),
+    async (req: any, res) => {
+      try {
+        const {
+          numeroNfse,
+          cnpjPrestador,
+          cnpjTomador,
+          nomeTomador,
+          dataEmissao,
+          valor,
+          descricao,
+          statusNfse,
+        } = req.body;
+
+        // Validate required fields
+        if (!cnpjTomador || !numeroNfse || !dataEmissao) {
+          return res.status(400).json({ message: "Campos obrigatórios faltando" });
+        }
+
+        const cleanCnpj = String(cnpjTomador).replace(/\D/g, "");
+        if (cleanCnpj.length !== 14) {
+          return res.status(400).json({ message: "CNPJ do tomador inválido" });
+        }
+
+        const parsedNumeroNfse = parseInt(String(numeroNfse), 10);
+        if (isNaN(parsedNumeroNfse)) {
+          return res.status(400).json({ message: "Número da NFS-e inválido" });
+        }
+
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(dataEmissao)) {
+          return res.status(400).json({ message: "Data de emissão inválida (formato: YYYY-MM-DD)" });
+        }
+
+        const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+        const objectStorageService = new ObjectStorageService();
+        let arquivoPdfPath: string | null = null;
+        let arquivoXmlPath: string | null = null;
+
+        if (files?.pdf?.[0]) {
+          const pdfFile = files.pdf[0];
+          const relativePath = `nfse/${cleanCnpj}/${dataEmissao}_${parsedNumeroNfse}.pdf`;
+          arquivoPdfPath = await objectStorageService.uploadToPrivate(relativePath, pdfFile.buffer);
+        }
+
+        if (files?.xml?.[0]) {
+          const xmlFile = files.xml[0];
+          const relativePath = `nfse/${cleanCnpj}/${dataEmissao}_${parsedNumeroNfse}.xml`;
+          arquivoXmlPath = await objectStorageService.uploadToPrivate(relativePath, xmlFile.buffer);
+        }
+
+        const nfse = await storage.createNfse({
+          numeroNfse: parsedNumeroNfse,
+          cnpjPrestador: cnpjPrestador ? String(cnpjPrestador).replace(/\D/g, "") : null,
+          cnpjTomador: cleanCnpj,
+          nomeTomador: nomeTomador || null,
+          dataEmissao: dataEmissao,
+          valor: valor ? String(valor) : null,
+          descricao: descricao || null,
+          statusNfse: statusNfse || "emitida",
+          arquivoPdfPath,
+          arquivoXmlPath,
+        });
+
+        res.json(nfse);
+      } catch (error) {
+        console.error("Error creating NFS-e:", error);
+        res.status(500).json({ message: "Erro ao criar NFS-e" });
+      }
+    }
+  );
 
   return httpServer;
 }

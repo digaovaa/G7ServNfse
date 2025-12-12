@@ -1,4 +1,4 @@
-import { FileText, LogOut, User, History, Home } from "lucide-react";
+import { FileText, LogOut, User, History, Home, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -67,6 +67,19 @@ export function Header() {
                 Histórico
               </Button>
             </Link>
+            {user?.role === "admin" && (
+              <Link href="/admin">
+                <Button
+                  variant={location === "/admin" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="gap-2"
+                  data-testid="link-admin"
+                >
+                  <Settings className="h-4 w-4" />
+                  Admin
+                </Button>
+              </Link>
+            )}
           </nav>
         </div>
 

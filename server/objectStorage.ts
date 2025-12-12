@@ -217,6 +217,21 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  async uploadToPrivate(relativePath: string, buffer: Buffer): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    const fullPath = `${privateObjectDir}/${relativePath}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+    
+    await file.save(buffer, {
+      resumable: false,
+    });
+    
+    return `/objects/${relativePath}`;
+  }
 }
 
 function parseObjectPath(path: string): {

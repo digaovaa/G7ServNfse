@@ -26,6 +26,7 @@ export interface IStorage {
   ): Promise<NfseMetadata[]>;
   createNfse(nfse: InsertNfseMetadata): Promise<NfseMetadata>;
   getNfseByIds(ids: string[]): Promise<NfseMetadata[]>;
+  getRecentNfse(limit: number): Promise<NfseMetadata[]>;
 
   // Download log operations
   createDownloadLog(log: InsertDownloadLog): Promise<DownloadLog>;
@@ -40,18 +41,50 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
+    // First try to find existing user by id or email
+    const existingById = userData.id ? await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userData.id))
+      .then(rows => rows[0]) : undefined;
+    
+    const existingByEmail = userData.email ? await db
+      .select()
+      .from(users)
+      .where(eq(users.email, userData.email))
+      .then(rows => rows[0]) : undefined;
+
+    if (existingById) {
+      // Update existing user by id
+      const [user] = await db
+        .update(users)
+        .set({
           ...userData,
           updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
+        })
+        .where(eq(users.id, userData.id!))
+        .returning();
+      return user;
+    } else if (existingByEmail) {
+      // Update existing user by email (different id but same email)
+      const [user] = await db
+        .update(users)
+        .set({
+          id: userData.id,
+          ...userData,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.email, userData.email!))
+        .returning();
+      return user;
+    } else {
+      // Insert new user
+      const [user] = await db
+        .insert(users)
+        .values(userData)
+        .returning();
+      return user;
+    }
   }
 
   // NFS-e operations
@@ -99,6 +132,15 @@ export class DatabaseStorage implements IStorage {
       const nfse = await this.getNfseById(id);
       if (nfse) results.push(nfse);
     }
+    return results;
+  }
+
+  async getRecentNfse(limit: number): Promise<NfseMetadata[]> {
+    const results = await db
+      .select()
+      .from(nfseMetadata)
+      .orderBy(desc(nfseMetadata.createdAt))
+      .limit(limit);
     return results;
   }
 
