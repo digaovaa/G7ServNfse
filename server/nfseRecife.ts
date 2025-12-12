@@ -1,7 +1,9 @@
 import * as soap from "soap";
 import * as https from "https";
 import * as fs from "fs";
-import * as forge from "node-forge";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const forge = require("node-forge");
 import { parseStringPromise, Builder } from "xml2js";
 
 const WSDL_URL = "https://nfse.recife.pe.gov.br/WSNacional/nfse_v01.asmx?wsdl";

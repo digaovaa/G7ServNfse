@@ -1,6 +1,8 @@
 import * as https from "https";
 import * as fs from "fs";
-import * as forge from "node-forge";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const forge = require("node-forge");
 import { gunzipSync } from "zlib";
 
 const BASE_URL_PROD = "https://www.nfse.gov.br/api";
