@@ -10,6 +10,7 @@ import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import History from "@/pages/History";
 import Admin from "@/pages/Admin";
+import Configuracoes from "@/pages/Configuracoes";
 
 function AdminRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -51,6 +52,9 @@ function Router() {
         <>
           <Route path="/" component={Dashboard} />
           <Route path="/historico" component={History} />
+          <Route path="/configuracoes">
+            <AdminRoute component={Configuracoes} />
+          </Route>
           <Route path="/admin">
             <AdminRoute component={Admin} />
           </Route>

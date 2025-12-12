@@ -68,17 +68,30 @@ export function Header() {
               </Button>
             </Link>
             {user?.role === "admin" && (
-              <Link href="/admin">
-                <Button
-                  variant={location === "/admin" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="gap-2"
-                  data-testid="link-admin"
-                >
-                  <Settings className="h-4 w-4" />
-                  Admin
-                </Button>
-              </Link>
+              <>
+                <Link href="/configuracoes">
+                  <Button
+                    variant={location === "/configuracoes" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="gap-2"
+                    data-testid="link-configuracoes"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Configuracoes
+                  </Button>
+                </Link>
+                <Link href="/admin">
+                  <Button
+                    variant={location === "/admin" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="gap-2"
+                    data-testid="link-admin"
+                  >
+                    <User className="h-4 w-4" />
+                    Admin
+                  </Button>
+                </Link>
+              </>
             )}
           </nav>
         </div>

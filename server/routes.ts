@@ -7,6 +7,9 @@ import { ObjectPermission } from "./objectAcl";
 import { cnpjSearchSchema, batchDownloadSchema } from "@shared/schema";
 import archiver from "archiver";
 import multer from "multer";
+import { nfseNacionalService } from "./nfseNacional";
+import { nfseRecifeService } from "./nfseRecife";
+import { emailService } from "./emailService";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -347,6 +350,249 @@ export async function registerRoutes(
       }
     }
   );
+
+  // ======== NFS-e Portal Integration Routes ========
+
+  // Check integration status
+  app.get("/api/integracao/status", isAuthenticated, async (req: any, res) => {
+    res.json({
+      certificadoNacional: nfseNacionalService.isCertificadoConfigurado(),
+      certificadoMunicipal: nfseRecifeService.isCertificadoConfigurado(),
+      emailConfigurado: emailService.isConfigured(),
+    });
+  });
+
+  // Configure digital certificate
+  app.post(
+    "/api/integracao/certificado",
+    isAuthenticated,
+    isAdmin,
+    upload.single("certificado"),
+    async (req: any, res) => {
+      try {
+        const { senha, sistema } = req.body;
+        const file = req.file;
+
+        if (!file) {
+          return res.status(400).json({ message: "Arquivo do certificado e obrigatorio" });
+        }
+
+        if (!senha) {
+          return res.status(400).json({ message: "Senha do certificado e obrigatoria" });
+        }
+
+        let sucesso = false;
+
+        if (sistema === "municipal") {
+          sucesso = await nfseRecifeService.configurarCertificadoBuffer(file.buffer, senha);
+        } else {
+          sucesso = await nfseNacionalService.configurarCertificado(file.buffer, senha);
+        }
+
+        if (sucesso) {
+          res.json({ message: "Certificado configurado com sucesso", sucesso: true });
+        } else {
+          res.status(400).json({ message: "Erro ao processar certificado. Verifique a senha." });
+        }
+      } catch (error: any) {
+        console.error("Erro ao configurar certificado:", error);
+        res.status(500).json({ message: error.message || "Erro ao configurar certificado" });
+      }
+    }
+  );
+
+  // Configure email service
+  app.post("/api/integracao/email", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { apiKey, fromEmail, fromName, provider } = req.body;
+
+      if (!apiKey || !fromEmail) {
+        return res.status(400).json({ message: "API Key e email de origem sao obrigatorios" });
+      }
+
+      emailService.setProvider(provider || "sendgrid");
+      emailService.configure(apiKey, fromEmail, fromName || "Sistema NFS-e");
+
+      res.json({ message: "Servico de email configurado com sucesso" });
+    } catch (error) {
+      console.error("Erro ao configurar email:", error);
+      res.status(500).json({ message: "Erro ao configurar servico de email" });
+    }
+  });
+
+  // Query NFS-e from government portal
+  app.get("/api/portal/nfse", isAuthenticated, async (req: any, res) => {
+    try {
+      const { cnpjPrestador, inscricaoMunicipal, cnpjTomador, dataInicio, dataFim, sistema } = req.query;
+
+      if (!cnpjPrestador) {
+        return res.status(400).json({ message: "CNPJ do prestador e obrigatorio" });
+      }
+
+      const hoje = new Date();
+      const trintaDiasAtras = new Date(hoje);
+      trintaDiasAtras.setDate(hoje.getDate() - 30);
+
+      const inicio = (dataInicio as string) || trintaDiasAtras.toISOString().split("T")[0];
+      const fim = (dataFim as string) || hoje.toISOString().split("T")[0];
+
+      let notas: any[] = [];
+
+      if (sistema === "municipal" && nfseRecifeService.isCertificadoConfigurado()) {
+        if (cnpjTomador) {
+          notas = await nfseRecifeService.consultarNfsePorTomador(
+            cnpjPrestador as string,
+            inscricaoMunicipal as string || "",
+            cnpjTomador as string,
+            inicio,
+            fim
+          );
+        } else {
+          notas = await nfseRecifeService.consultarNfsePorPeriodo(
+            cnpjPrestador as string,
+            inscricaoMunicipal as string || "",
+            inicio,
+            fim
+          );
+        }
+      } else if (nfseNacionalService.isCertificadoConfigurado()) {
+        if (cnpjTomador) {
+          notas = await nfseNacionalService.consultarNfsesPorTomador(
+            cnpjPrestador as string,
+            cnpjTomador as string,
+            inicio,
+            fim
+          );
+        } else {
+          notas = await nfseNacionalService.consultarNfsesPorPeriodo(
+            cnpjPrestador as string,
+            inicio,
+            fim
+          );
+        }
+      } else {
+        return res.status(400).json({ 
+          message: "Certificado digital nao configurado. Configure o certificado no painel de administracao." 
+        });
+      }
+
+      res.json(notas);
+    } catch (error: any) {
+      console.error("Erro ao consultar portal:", error);
+      res.status(500).json({ message: error.message || "Erro ao consultar portal NFS-e" });
+    }
+  });
+
+  // Download PDF from portal
+  app.get("/api/portal/nfse/:chave/pdf", isAuthenticated, async (req: any, res) => {
+    try {
+      const { chave } = req.params;
+      const userId = req.user.claims.sub;
+
+      if (!nfseNacionalService.isCertificadoConfigurado()) {
+        return res.status(400).json({ message: "Certificado digital nao configurado" });
+      }
+
+      const pdfBuffer = await nfseNacionalService.downloadDanfse(chave);
+
+      await storage.createDownloadLog({
+        userId,
+        nfseId: chave,
+        tipoArquivo: "pdf",
+        nomeArquivo: `NFSe_${chave}.pdf`,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="NFSe_${chave}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error("Erro ao baixar PDF:", error);
+      res.status(500).json({ message: error.message || "Erro ao baixar PDF" });
+    }
+  });
+
+  // Send NFS-e by email
+  app.post("/api/portal/nfse/enviar-email", isAuthenticated, async (req: any, res) => {
+    try {
+      const { chaveAcesso, emailDestino, tomadorNome, numero, dataEmissao, valor } = req.body;
+
+      if (!emailDestino) {
+        return res.status(400).json({ message: "Email de destino e obrigatorio" });
+      }
+
+      if (!emailService.isConfigured()) {
+        return res.status(400).json({ 
+          message: "Servico de email nao configurado. Configure no painel de administracao." 
+        });
+      }
+
+      if (!nfseNacionalService.isCertificadoConfigurado()) {
+        return res.status(400).json({ message: "Certificado digital nao configurado" });
+      }
+
+      const pdfBuffer = await nfseNacionalService.downloadDanfse(chaveAcesso);
+
+      const sucesso = await emailService.sendNfseEmail(
+        emailDestino,
+        tomadorNome || "Cliente",
+        numero || chaveAcesso,
+        dataEmissao || new Date().toISOString().split("T")[0],
+        valor || "0,00",
+        pdfBuffer
+      );
+
+      if (sucesso) {
+        res.json({ message: "Email enviado com sucesso" });
+      } else {
+        res.status(500).json({ message: "Erro ao enviar email" });
+      }
+    } catch (error: any) {
+      console.error("Erro ao enviar email:", error);
+      res.status(500).json({ message: error.message || "Erro ao enviar email" });
+    }
+  });
+
+  // Batch send emails
+  app.post("/api/portal/nfse/enviar-lote", isAuthenticated, async (req: any, res) => {
+    try {
+      const { notas } = req.body;
+
+      if (!notas || !Array.isArray(notas) || notas.length === 0) {
+        return res.status(400).json({ message: "Lista de notas e obrigatoria" });
+      }
+
+      if (!emailService.isConfigured()) {
+        return res.status(400).json({ message: "Servico de email nao configurado" });
+      }
+
+      if (!nfseNacionalService.isCertificadoConfigurado()) {
+        return res.status(400).json({ message: "Certificado digital nao configurado" });
+      }
+
+      const resultados = [];
+      for (const nota of notas) {
+        try {
+          const pdfBuffer = await nfseNacionalService.downloadDanfse(nota.chaveAcesso);
+          const sucesso = await emailService.sendNfseEmail(
+            nota.email,
+            nota.tomadorNome,
+            nota.numero,
+            nota.dataEmissao,
+            nota.valor,
+            pdfBuffer
+          );
+          resultados.push({ chave: nota.chaveAcesso, sucesso, email: nota.email });
+        } catch (error: any) {
+          resultados.push({ chave: nota.chaveAcesso, sucesso: false, erro: error.message });
+        }
+      }
+
+      res.json({ resultados });
+    } catch (error: any) {
+      console.error("Erro ao enviar lote:", error);
+      res.status(500).json({ message: error.message || "Erro ao enviar lote de emails" });
+    }
+  });
 
   return httpServer;
 }
