@@ -1,0 +1,38 @@
+Para o download de notas do portal do governo federal (NFS-e Nacional), a API oficial disponível é a API do Ambiente de Dados Nacional (ADN).
+
+Diferente do modelo antigo onde cada prefeitura tinha sua própria integração, o sistema nacional centraliza a distribuição de documentos fiscais de serviço para os municípios conveniados.
+
+Aqui estão os detalhes técnicos para desenvolvedores:
+
+1. Endpoints de Download e Distribuição
+A comunicação é via REST (JSON), mas exige autenticação mútua (mTLS) com certificado digital. Os principais endpoints para baixar notas são:
+
+Distribuição de DFe (Documentos Fiscais Eletrônicos):
+Utilizada para baixar notas onde seu CNPJ/CPF é prestador, tomador ou intermediário. Funciona por NSU (Número Sequencial Único), similar à NFe.
+GET /DFe/{NSU}
+
+Consulta/Download por Chave:
+Se você já possui a chave de acesso da nota.
+GET /nfse/{chaveAcesso}
+(Retorna o XML da nota codificado em GZip+Base64)
+
+Download do PDF (DANFSe):
+Para obter o espelho da nota para impressão.
+GET /danfse/{chaveAcesso}
+
+2. Requisitos Técnicos
+Protocolo: REST com payloads em JSON.
+
+Segurança: Autenticação mútua (mTLS) obrigatória. Você precisa configurar o seu cliente HTTP para enviar o Certificado Digital ICP-Brasil (A1 ou A3) na conexão.
+
+Assinatura: Algumas requisições (como a emissão) exigem XML assinado (XMLDSIG), mas para a distribuição (leitura) o foco principal é o mTLS.
+
+3. Documentação Oficial
+A documentação técnica completa (Swagger/OpenAPI e manuais de integração) está disponível no Portal da NFS-e:
+
+Portal: www.gov.br/nfse/pt-br
+
+Caminho: Menu Biblioteca > Documentação Técnica > APIs - Prod. Restrita e Produção.
+
+⚠️ Importante: Adesão Municipal
+Esta API não baixa notas de todos os municípios do Brasil automaticamente. Ela só retorna notas de municípios que aderiram ao projeto NFS-e Nacional ou que possuem convênio para compartilhamento de dados com o ambiente nacional. Para municípios não conveniados (como grandes capitais que ainda usam sistemas próprios sem repasse), você ainda precisará consultar a API específica da prefeitura local.
