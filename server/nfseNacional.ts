@@ -5,8 +5,10 @@ const require = createRequire(import.meta.url);
 const forge = require("node-forge");
 import { gunzipSync } from "zlib";
 
-const BASE_URL_PROD = "https://adn.nfse.gov.br";
-const BASE_URL_HOMOLOG = "https://adn.producaorestrita.nfse.gov.br";
+const BASE_URL_PROD = "https://api.nfse.gov.br";
+const BASE_URL_HOMOLOG = "https://api.producaorestrita.nfse.gov.br";
+const ADN_URL_PROD = "https://adn.nfse.gov.br";
+const ADN_URL_HOMOLOG = "https://adn.producaorestrita.nfse.gov.br";
 
 export interface CertificadoConfig {
   pfxBuffer: Buffer;
@@ -42,6 +44,10 @@ export class NfseNacionalService {
 
   private get baseUrl(): string {
     return this.ambiente === "producao" ? BASE_URL_PROD : BASE_URL_HOMOLOG;
+  }
+
+  private get adnUrl(): string {
+    return this.ambiente === "producao" ? ADN_URL_PROD : ADN_URL_HOMOLOG;
   }
 
   setAmbiente(ambiente: "producao" | "homologacao"): void {
@@ -98,9 +104,10 @@ export class NfseNacionalService {
       throw new Error("Certificado digital nao configurado");
     }
 
+    // ADN endpoint for distribution: /contribuintes/DFe/{NSU}
     const endpoint = params.nsu
-      ? `${this.baseUrl}/contribuintes/dfe/${params.nsu}`
-      : `${this.baseUrl}/contribuintes/dfe?ultNSU=${params.ultNsu || "0"}`;
+      ? `${this.adnUrl}/contribuintes/DFe/${params.nsu}`
+      : `${this.baseUrl}/DFe?ultNSU=${params.ultNsu || "0"}`;
 
     const response = await this.makeRequest("GET", endpoint);
     return this.parseDistribuicaoResponse(response);
@@ -111,7 +118,8 @@ export class NfseNacionalService {
       throw new Error("Certificado digital nao configurado");
     }
 
-    const endpoint = `${this.baseUrl}/contribuintes/nfse/${chaveAcesso}`;
+    // API endpoint: GET /nfse/{chaveAcesso}
+    const endpoint = `${this.baseUrl}/nfse/${chaveAcesso}`;
     const response = await this.makeRequest("GET", endpoint);
 
     if (!response || !response.nfseXmlGZipB64) {
@@ -133,7 +141,8 @@ export class NfseNacionalService {
       throw new Error("Certificado digital nao configurado");
     }
 
-    const endpoint = `${this.baseUrl}/danfse/nfse/${chaveAcesso}`;
+    // API endpoint: GET /danfse/{chaveAcesso}
+    const endpoint = `${this.baseUrl}/danfse/${chaveAcesso}`;
     const response = await this.makeRequest("GET", endpoint, true);
 
     if (response.pdfB64) {
