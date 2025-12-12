@@ -54,31 +54,35 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.email, userData.email))
       .then(rows => rows[0]) : undefined;
 
+    // Don't overwrite role if user already exists (preserve admin status)
+    const updateData = {
+      ...userData,
+      updatedAt: new Date(),
+    };
+    // Remove role from update to preserve existing role
+    delete (updateData as any).role;
+
     if (existingById) {
-      // Update existing user by id
+      // Update existing user by id (preserve role)
       const [user] = await db
         .update(users)
-        .set({
-          ...userData,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(users.id, userData.id!))
         .returning();
       return user;
     } else if (existingByEmail) {
-      // Update existing user by email (different id but same email)
+      // Update existing user by email (preserve role)
       const [user] = await db
         .update(users)
         .set({
           id: userData.id,
-          ...userData,
-          updatedAt: new Date(),
+          ...updateData,
         })
         .where(eq(users.email, userData.email!))
         .returning();
       return user;
     } else {
-      // Insert new user
+      // Insert new user with default role
       const [user] = await db
         .insert(users)
         .values(userData)
