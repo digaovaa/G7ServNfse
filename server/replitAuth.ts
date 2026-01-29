@@ -129,9 +129,18 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // Skip auth check when not running on Replit (local development)
+  if (!process.env.REPL_ID) {
+    // Set a mock user for local development
+    (req as any).user = {
+      claims: { sub: "local-dev-user" },
+    };
+    return next();
+  }
+
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!req.isAuthenticated || !req.isAuthenticated() || !user?.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 

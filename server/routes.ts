@@ -8,17 +8,49 @@ import { cnpjSearchSchema, batchDownloadSchema } from "@shared/schema";
 import archiver from "archiver";
 import multer from "multer";
 import { nfseNacionalService } from "./nfseNacional";
-import { nfseRecifeService } from "./nfseRecife";
+import { nfseVenancioAiresService } from "./nfseVenancioAires";
 import { emailService } from "./emailService";
 
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Load saved certificates from database on startup
+async function loadSavedCertificates(): Promise<void> {
+  try {
+    // Load national certificate
+    const nacionalConfig = await storage.getConfig("certificado_nacional");
+    if (nacionalConfig?.binaryValue && nacionalConfig?.value) {
+      const pfxBuffer = Buffer.from(nacionalConfig.binaryValue, "base64");
+      const sucesso = await nfseNacionalService.configurarCertificado(pfxBuffer, nacionalConfig.value);
+      if (sucesso) {
+        console.log("Certificado nacional carregado do banco de dados");
+      }
+    }
+
+    // Load municipal certificate
+    const municipalConfig = await storage.getConfig("certificado_municipal");
+    if (municipalConfig?.binaryValue && municipalConfig?.value) {
+      const pfxBuffer = Buffer.from(municipalConfig.binaryValue, "base64");
+      const sucesso = await nfseVenancioAiresService.configurarCertificadoBuffer(pfxBuffer, municipalConfig.value);
+      if (sucesso) {
+        console.log("Certificado municipal carregado do banco de dados");
+      }
+    }
+  } catch (error) {
+    console.error("Erro ao carregar certificados salvos:", error);
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Auth middleware
-  await setupAuth(app);
+  // Auth middleware (only on Replit)
+  if (process.env.REPL_ID) {
+    await setupAuth(app);
+  }
+
+  // Load saved certificates on startup
+  await loadSavedCertificates();
 
   // Auth routes
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
@@ -82,10 +114,10 @@ export async function registerRoutes(
       }
 
       const objectStorageService = new ObjectStorageService();
-      
+
       try {
         const objectFile = await objectStorageService.getObjectEntityFile(filePath);
-        
+
         // Generate standardized filename
         const cleanCnpj = nfse.cnpjTomador.replace(/\D/g, "");
         const cleanName = (nfse.nomeTomador || "Tomador")
@@ -126,9 +158,9 @@ export async function registerRoutes(
       const validation = batchDownloadSchema.safeParse(req.body);
 
       if (!validation.success) {
-        return res.status(400).json({ 
-          message: "Dados inválidos", 
-          errors: validation.error.errors 
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: validation.error.errors
         });
       }
 
@@ -156,7 +188,7 @@ export async function registerRoutes(
             const objectFile = await objectStorageService.getObjectEntityFile(
               nfse.arquivoPdfPath
             );
-            
+
             const cleanCnpj = nfse.cnpjTomador.replace(/\D/g, "");
             const cleanName = (nfse.nomeTomador || "Tomador")
               .replace(/[^a-zA-Z0-9\s]/g, "")
@@ -357,7 +389,7 @@ export async function registerRoutes(
   app.get("/api/integracao/status", isAuthenticated, async (req: any, res) => {
     res.json({
       certificadoNacional: nfseNacionalService.isCertificadoConfigurado(),
-      certificadoMunicipal: nfseRecifeService.isCertificadoConfigurado(),
+      certificadoMunicipal: nfseVenancioAiresService.isCertificadoConfigurado(),
       emailConfigurado: emailService.isConfigured(),
     });
   });
@@ -382,14 +414,19 @@ export async function registerRoutes(
         }
 
         let sucesso = false;
+        const configKey = sistema === "municipal" ? "certificado_municipal" : "certificado_nacional";
 
         if (sistema === "municipal") {
-          sucesso = await nfseRecifeService.configurarCertificadoBuffer(file.buffer, senha);
+          sucesso = await nfseVenancioAiresService.configurarCertificadoBuffer(file.buffer, senha);
         } else {
           sucesso = await nfseNacionalService.configurarCertificado(file.buffer, senha);
         }
 
         if (sucesso) {
+          // Save certificate to database for persistence across restarts
+          const pfxBase64 = file.buffer.toString("base64");
+          await storage.saveConfig(configKey, senha, pfxBase64);
+
           res.json({ message: "Certificado configurado com sucesso", sucesso: true });
         } else {
           res.status(400).json({ message: "Erro ao processar certificado. Verifique a senha." });
@@ -438,9 +475,9 @@ export async function registerRoutes(
 
       let notas: any[] = [];
 
-      if (sistema === "municipal" && nfseRecifeService.isCertificadoConfigurado()) {
+      if (sistema === "municipal" && nfseVenancioAiresService.isCertificadoConfigurado()) {
         if (cnpjTomador) {
-          notas = await nfseRecifeService.consultarNfsePorTomador(
+          notas = await nfseVenancioAiresService.consultarNfsePorTomador(
             cnpjPrestador as string,
             inscricaoMunicipal as string || "",
             cnpjTomador as string,
@@ -448,7 +485,7 @@ export async function registerRoutes(
             fim
           );
         } else {
-          notas = await nfseRecifeService.consultarNfsePorPeriodo(
+          notas = await nfseVenancioAiresService.consultarNfsePorPeriodo(
             cnpjPrestador as string,
             inscricaoMunicipal as string || "",
             inicio,
@@ -471,8 +508,8 @@ export async function registerRoutes(
           );
         }
       } else {
-        return res.status(400).json({ 
-          message: "Certificado digital nao configurado. Configure o certificado no painel de administracao." 
+        return res.status(400).json({
+          message: "Certificado digital nao configurado. Configure o certificado no painel de administracao."
         });
       }
 
@@ -498,8 +535,8 @@ export async function registerRoutes(
       await storage.createDownloadLog({
         userId,
         nfseId: chave,
-        tipoArquivo: "pdf",
-        nomeArquivo: `NFSe_${chave}.pdf`,
+        tipoDownload: "pdf",
+        arquivoNome: `NFSe_${chave}.pdf`,
       });
 
       res.setHeader("Content-Type", "application/pdf");
@@ -521,8 +558,8 @@ export async function registerRoutes(
       }
 
       if (!emailService.isConfigured()) {
-        return res.status(400).json({ 
-          message: "Servico de email nao configurado. Configure no painel de administracao." 
+        return res.status(400).json({
+          message: "Servico de email nao configurado. Configure no painel de administracao."
         });
       }
 

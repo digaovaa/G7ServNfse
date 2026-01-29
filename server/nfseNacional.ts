@@ -1,14 +1,14 @@
 import * as https from "https";
 import * as fs from "fs";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const forge = require("node-forge");
+import forge from "node-forge";
 import { gunzipSync } from "zlib";
 
-const BASE_URL_PROD = "https://api.nfse.gov.br";
-const BASE_URL_HOMOLOG = "https://api.producaorestrita.nfse.gov.br";
-const ADN_URL_PROD = "https://adn.nfse.gov.br";
-const ADN_URL_HOMOLOG = "https://adn.producaorestrita.nfse.gov.br";
+// URLs corretas conforme documentação oficial NFS-e Nacional (API ADN)
+// sefin.nfse.gov.br é o endpoint real que existe (requer certificado)
+const BASE_URL_PROD = "https://sefin.nfse.gov.br";
+const BASE_URL_HOMOLOG = "https://sefin.producaorestrita.nfse.gov.br";
+const ADN_URL_PROD = "https://sefin.nfse.gov.br";
+const ADN_URL_HOMOLOG = "https://sefin.producaorestrita.nfse.gov.br";
 
 export interface CertificadoConfig {
   pfxBuffer: Buffer;
@@ -104,10 +104,10 @@ export class NfseNacionalService {
       throw new Error("Certificado digital nao configurado");
     }
 
-    // ADN endpoint for distribution: /contribuintes/DFe/{NSU}
+    // ADN endpoint for distribution: /adn/DFe (conforme AuraFiscal)
     const endpoint = params.nsu
-      ? `${this.adnUrl}/contribuintes/DFe/${params.nsu}`
-      : `${this.baseUrl}/DFe?ultNSU=${params.ultNsu || "0"}`;
+      ? `${this.adnUrl}/adn/DFe/${params.nsu}`
+      : `${this.baseUrl}/adn/DFe?ultNSU=${params.ultNsu || "0"}`;
 
     const response = await this.makeRequest("GET", endpoint);
     return this.parseDistribuicaoResponse(response);
@@ -118,8 +118,8 @@ export class NfseNacionalService {
       throw new Error("Certificado digital nao configurado");
     }
 
-    // API endpoint: GET /nfse/{chaveAcesso}
-    const endpoint = `${this.baseUrl}/nfse/${chaveAcesso}`;
+    // API endpoint: GET /adn/nfse/{chaveAcesso}
+    const endpoint = `${this.baseUrl}/adn/nfse/${chaveAcesso}`;
     const response = await this.makeRequest("GET", endpoint);
 
     if (!response || !response.nfseXmlGZipB64) {
@@ -141,8 +141,8 @@ export class NfseNacionalService {
       throw new Error("Certificado digital nao configurado");
     }
 
-    // API endpoint: GET /danfse/{chaveAcesso}
-    const endpoint = `${this.baseUrl}/danfse/${chaveAcesso}`;
+    // API endpoint: GET /adn/danfse/{chaveAcesso}
+    const endpoint = `${this.baseUrl}/adn/danfse/${chaveAcesso}`;
     const response = await this.makeRequest("GET", endpoint, true);
 
     if (response.pdfB64) {

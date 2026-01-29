@@ -61,6 +61,16 @@ export const nfseMetadata = pgTable(
   ]
 );
 
+// System configuration table for persistent settings (certificates, etc.)
+export const systemConfig = pgTable("system_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value"), // For text values
+  binaryValue: text("binary_value"), // Base64 encoded binary data (certificates)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Download logs table for audit trail
 export const downloadLogs = pgTable(
   "download_logs",

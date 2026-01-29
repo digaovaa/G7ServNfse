@@ -1,13 +1,12 @@
 import * as soap from "soap";
 import * as https from "https";
 import * as fs from "fs";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const forge = require("node-forge");
+import forge from "node-forge";
 import { parseStringPromise, Builder } from "xml2js";
 
-const WSDL_URL = "https://nfse.recife.pe.gov.br/WSNacional/nfse_v01.asmx?wsdl";
-const ENDPOINT_URL = "https://nfse.recife.pe.gov.br/WSNacional/nfse_v01.asmx";
+const WSDL_URL = "https://nfe.venancioaires.rs.gov.br/thema-nfse/services/NFSEmensagens?wsdl";
+const ENDPOINT_URL = "https://nfe.venancioaires.rs.gov.br/thema-nfse/services/NFSEmensagens";
+const PORTAL_URL = "https://nfe.venancioaires.rs.gov.br";
 
 export interface CertificadoDigital {
   pfxBuffer: Buffer;
@@ -35,7 +34,7 @@ export interface NfseResult {
   xml?: string;
 }
 
-export class NfseRecifeService {
+export class NfseVenancioAiresService {
   private certificado: CertificadoDigital | null = null;
   private httpsAgent: https.Agent | null = null;
 
@@ -103,7 +102,7 @@ export class NfseRecifeService {
     try {
       const client = await soap.createClientAsync(WSDL_URL, {
         wsdl_options: { httpsAgent: this.httpsAgent },
-        httpsAgent: this.httpsAgent,
+        request: require("axios").create({ httpsAgent: this.httpsAgent }),
         endpoint: ENDPOINT_URL,
       });
 
@@ -159,8 +158,8 @@ export class NfseRecifeService {
     numeroNfse: string,
     codigoVerificacao: string
   ): Promise<Buffer> {
-    const pdfUrl = `https://nfse.recife.pe.gov.br/nfse.aspx?nfse=${numeroNfse}&cv=${codigoVerificacao}&im=${inscricaoMunicipal}`;
-    
+    const pdfUrl = `${PORTAL_URL}/thema-nfse/pages/nfse.jsf?nfse=${numeroNfse}&cv=${codigoVerificacao}&im=${inscricaoMunicipal}`;
+
     const response = await fetch(pdfUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0",
@@ -177,7 +176,7 @@ export class NfseRecifeService {
   }
 
   getLinkVisualizacao(numeroNfse: string, codigoVerificacao: string, inscricaoMunicipal: string): string {
-    return `https://nfse.recife.pe.gov.br/nfse.aspx?nfse=${numeroNfse}&cv=${codigoVerificacao}&im=${inscricaoMunicipal}`;
+    return `${PORTAL_URL}/thema-nfse/pages/nfse.jsf?nfse=${numeroNfse}&cv=${codigoVerificacao}&im=${inscricaoMunicipal}`;
   }
 
   private getCabecalho(): string {
@@ -278,4 +277,4 @@ export class NfseRecifeService {
   }
 }
 
-export const nfseRecifeService = new NfseRecifeService();
+export const nfseVenancioAiresService = new NfseVenancioAiresService();

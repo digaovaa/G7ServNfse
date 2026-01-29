@@ -2,6 +2,7 @@ import {
   users,
   nfseMetadata,
   downloadLogs,
+  systemConfig,
   type User,
   type UpsertUser,
   type NfseMetadata,
@@ -31,6 +32,10 @@ export interface IStorage {
   // Download log operations
   createDownloadLog(log: InsertDownloadLog): Promise<DownloadLog>;
   getDownloadLogsByUser(userId: string): Promise<DownloadLog[]>;
+
+  // System config operations
+  saveConfig(key: string, value?: string, binaryValue?: string): Promise<void>;
+  getConfig(key: string): Promise<{ value?: string; binaryValue?: string } | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -47,7 +52,7 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(eq(users.id, userData.id))
       .then(rows => rows[0]) : undefined;
-    
+
     const existingByEmail = userData.email ? await db
       .select()
       .from(users)
@@ -162,6 +167,26 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(downloadLogs.dataDownload))
       .limit(100);
     return results;
+  }
+
+  // System config operations
+  async saveConfig(key: string, value?: string, binaryValue?: string): Promise<void> {
+    await db
+      .insert(systemConfig)
+      .values({ key, value, binaryValue, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: systemConfig.key,
+        set: { value, binaryValue, updatedAt: new Date() },
+      });
+  }
+
+  async getConfig(key: string): Promise<{ value?: string; binaryValue?: string } | null> {
+    const [result] = await db
+      .select({ value: systemConfig.value, binaryValue: systemConfig.binaryValue })
+      .from(systemConfig)
+      .where(eq(systemConfig.key, key));
+    if (!result) return null;
+    return { value: result.value ?? undefined, binaryValue: result.binaryValue ?? undefined };
   }
 }
 
